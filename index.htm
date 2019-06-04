@@ -1,0 +1,602 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<script type="text/javascript">
+var gl;
+var shaderProgram;
+var uPMatrix;
+var vertexPositionBuffer;
+var vertexColorBuffer;
+var vertexCoordsBuffer;
+var vertexPointCloudPositionBuffer;
+var vertexPointCloudColorBuffer;
+var vertexPointCloudCoordsBuffer;
+
+//Implementacja mnożenia macierzy
+function MatrixMul(a, b)
+{
+  c = [
+  0, 0, 0, 0,
+  0, 0, 0, 0,
+  0, 0, 0, 0,
+  0, 0, 0, 0,
+  ];
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      c[i * 4 + j] = 0.0;
+      for (let k = 0; k < 4; k++) {
+        c[i * 4 + j] += a[i * 4 + k] * b[k * 4 + j];
+      }
+    }
+  }
+
+  return c;
+}
+
+//Implementacja transpozycji macierzy
+function MatrixTranspose(a)
+{
+  c = [
+  0, 0, 0, 0,
+  0, 0, 0, 0,
+  0, 0, 0, 0,
+  0, 0, 0, 0,
+  ];
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      c[i * 4 + j] = a[j * 4 + i];
+    }
+  }
+
+  return c;
+}
+
+function startGL()
+{
+  //Init OpenGL context
+  let canvas = document.getElementById('canvas3D');
+  gl = canvas.getContext('experimental-webgl');
+  gl.viewportWidth = canvas.width;
+  gl.viewportHeight = canvas.height;
+
+  //Init Shaders
+  const vertextShaderSource = `
+    precision highp float;
+    attribute vec3 aVertexPosition;
+    attribute vec3 aVertexColor;
+    attribute vec2 aVertexCoords;
+    //attribute vec3 aVertexCloudPosition;
+    //attribute vec3 aVertexCloudColor;
+    //attribute vec2 aVertexCloudCoords;
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+    uniform float uBrightness;
+
+    varying vec3 vColor;
+    varying vec2 vTexUV;
+    void main(void) {
+      gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+      gl_PointSize = 3.0;
+      vColor = aVertexColor * uBrightness;
+      vTexUV = aVertexCoords;
+    }
+  `;
+  const fragmentShaderSource = `
+    precision highp float;
+    varying vec3 vColor;
+    varying vec2 vTexUV;
+    uniform sampler2D uSampler;
+    void main(void) {
+       gl_FragColor = texture2D(uSampler,vTexUV);
+    }
+  `;
+  let fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+  let vertexShader   = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(fragmentShader, fragmentShaderSource);
+  gl.shaderSource(vertexShader, vertextShaderSource);
+  gl.compileShader(fragmentShader);
+  gl.compileShader(vertexShader);
+  if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+    alert(gl.getShaderInfoLog(fragmentShader));
+    return null;
+  }
+
+  if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+    alert(gl.getShaderInfoLog(vertexShader));
+    return null;
+  }
+
+  shaderProgram = gl.createProgram();
+  gl.attachShader(shaderProgram, vertexShader);
+  gl.attachShader(shaderProgram, fragmentShader);
+  gl.linkProgram(shaderProgram);
+  if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) alert('Could not initialise shaders');
+  
+  
+
+  function genPointCzasteczkiPosition(n)
+  {
+    let czasteczkiPosition = [];
+    for(let i = 0; i<n; i++)
+    {
+      czasteczkiPosition.push(Math.random()*3.5); //x
+      czasteczkiPosition.push(Math.random()*3.5); //y      
+      czasteczkiPosition.push(Math.random()*3.5); //z
+    }
+    return czasteczkiPosition;
+  }
+
+  let vertexCloudPosition = genPointCzasteczkiPosition(100);
+
+  function genPointCzasteczkiColor(n)
+  {
+    let czasteczkiColor = [];
+    for(let i = 0; i<n; i++)
+    {
+      czasteczkiColor.push(Math.random()*3.5); //x
+      czasteczkiColor.push(Math.random()*3.5); //y
+      czasteczkiColor.push(Math.random()*3.5); //z
+    }
+    return czasteczkiColor;
+  }
+
+  let vertexCloudColor = genPointCzasteczkiColor(300);
+
+  function createTriangle(Pos,n,s)
+  {
+    let vertex = [];
+    for(let i=0; i<n;i++)
+    {
+      vertex.push([Pos[3*i+0]-s]);
+      vertex.push([Pos[3*i+1]]);
+      vertex.push([Pos[3*i+2]-s]);
+
+      vertex.push([Pos[3*i+0]+s]);
+      vertex.push([Pos[3*i+1]]);
+      vertex.push([Pos[3*i+2]-s]);
+
+      vertex.push([Pos[3*i+0]]);
+      vertex.push([Pos[3*i+1]]);
+      vertex.push([Pos[3*i+2]+s]);
+    }
+    return vertex
+  }
+  vertexCloudPosition = createTriangle(vertexCloudPosition,100,0.1)
+
+
+  vertexPointCloudPositionBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexPointCloudPositionBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexCloudPosition), gl.STATIC_DRAW);
+  vertexPointCloudPositionBuffer.itemSize = 3;
+  vertexPointCloudPositionBuffer.numItems = vertexCloudPosition.length/(9);
+
+  vertexPointCloudColorBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexPointCloudColorBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexCloudColor), gl.STATIC_DRAW);
+  vertexPointCloudColorBuffer.itemSize = 3;
+  vertexPointCloudColorBuffer.numItems = vertexPointCloudColorBuffer.length/9;
+
+  vertexPointCloudCoordsBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexPointCloudCoordsBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexCloudColor), gl.STATIC_DRAW);
+  vertexPointCloudCoordsBuffer.itemSize = 2;
+  vertexPointCloudCoordsBuffer.numItems = vertexPointCloudCoordsBuffer.length/6;
+
+
+  //Init Buffers
+  let vertexPosition = [
+  //HEAD
+    //front
+    1,6,1.5,1,8,1.5,3,8,1.5, 3,8,1.5,3,6,1.5,1,6,1.5,
+    //left
+    1,6,-0.5,1,8,-0.5,1,8,1.5, 1,8,1.5,1,6,1.5,1,6,-0.5,
+    //up
+    1,8,1.5,1,8,-0.5,3,8,-0.5, 3,8,-0.5,3,8,1.5,1,8,1.5,
+    //right
+    3,6,1.5,3,8,1.5,3,8,-0.5, 3,8,-0.5,3,6,-0.5,3,6,1.5,
+    //down
+    1,6,-0.5,1,6,1.5,3,6,1.5, 3,6,1.5,3,6,-0.5,1,6,-0.5,
+    //back
+    3,6,-0.5,3,8,-0.5,1,8,-0.5, 1,8,-0.5,1,6,-0.5,3,6,-0.5,
+  //BODY
+    //front
+    0,3,1,0,6,1,4,6,1, 4,6,1,4,3,1,0,3,1,
+    //left
+    0,3,0,0,6,0,0,6,1, 0,6,1,0,3,1,0,3,0,
+    //up
+    0,6,1,0,6,0,4,6,0, 4,6,0,4,6,1,0,6,1,
+    //right
+    4,3,1,4,6,1,4,6,0, 4,6,0,4,3,0,4,3,1,
+    //down
+    0,3,0,0,3,1,4,3,1, 4,3,1,4,3,0,0,3,0,
+    //back
+    4,3,0,4,6,0,0,6,0, 0,6,0,0,3,0,4,3,0,
+  //LEGS
+    //front
+		1,0,1,1,3,1,3,3,1, 3,3,1,3,0,1,1,0,1,
+    //left
+    1,0,0,1,3,0,1,3,1, 1,3,1,1,0,1,1,0,0,
+    //up
+    1,3,1,1,3,0,3,3,0, 3,3,0,3,3,1,1,3,1,
+    //right
+    3,0,1,3,3,1,3,3,0, 3,3,0,3,0,0,3,0,1,
+    //down
+    1,0,0,1,0,1,3,0,1, 3,0,1,3,0,0,1,0,0,
+    //back
+    3,0,0,3,3,0,1,3,0, 1,3,0,1,0,0,3,0,0
+	];
+
+  vertexPositionBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexPosition), gl.STATIC_DRAW);
+  vertexPositionBuffer.itemSize = 3;
+  vertexPositionBuffer.numItems = vertexPosition.length/(9);
+
+  let vertexColor = [
+  //LEGS
+    1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+
+		1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+
+		1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+
+		1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+
+		1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+
+		1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+//BODY
+    1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+
+		1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+
+		1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+
+		1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+
+		1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+
+		1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+//HEAD
+    1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+
+		1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+
+		1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+
+		1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+
+		1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+
+		1,0,1, 1,0,1, 1,0,1,
+		1,0,1, 1,0,1, 1,0,1,
+	
+  ];
+
+  vertexColorBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexColorBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexColor), gl.STATIC_DRAW);
+  vertexColorBuffer.itemSize = 3;
+  vertexColorBuffer.numItems = vertexColorBuffer.length/9;
+
+  let vertexCoords = [
+    
+//head    
+  //H1
+    0.5, 0.222,  0.5, 0.111,  0.75, 0.111,
+    0.75, 0.111,  0.75, 0.222,  0.5, 0.222,
+  //H2  
+    0.25, 0.222,  0.25, 0.111,  0.5, 0.111,
+    0.5, 0.111,  0.5, 0.222,  0.25, 0.222,
+  //H3  
+    0.5, 0.111,  0.5, 0.0,  0.75, 0.0,
+    0.75, 0.0,  0.75, 0.111,  0.5, 0.111,
+  //H4  
+    0.75, 0.222,  0.75, 0.111,  1.0, 0.111,
+    1.0, 0.111,  1.0, 0.222,  0.75, 0.222,
+  //H5
+    0.5, 0.333,  0.5, 0.222,  0.75, 0.222,
+    0.75, 0.222,  0.75, 0.333,  0.5, 0.333,
+  //H6  
+    0.0, 0.222,  0.0, 0.111,  0.25, 0.111,
+    0.25, 0.111,  0.25, 0.222,  0.0, 0.222,
+//body
+  //B1
+    0.5, 0.555,  0.5, 0.444,  0.75, 0.444,
+    0.75, 0.444,  0.75, 0.555,  0.5, 0.555,
+  //B2
+    0.25, 0.555,  0.25, 0.444,  0.5, 0.444,
+    0.5, 0.444,  0.5, 0.555,  0.25, 0.555,
+  //B3
+    0.5, 0.666,  0.5, 0.555,  0.75, 0.555,
+    0.75, 0.555,  0.75, 0.666,  0.5, 0.666,
+  //B4
+    0.75, 0.555,  0.75, 0.444,  1.0, 0.444,
+    1.0, 0.444,  1.0, 0.555,  0.75, 0.555,
+  //B5  
+    0.5, 0.444,  0.5, 0.333,  0.75, 0.333,
+    0.75, 0.333,  0.75, 0.444,  0.5, 0.444,
+  //B6
+    0.0, 0.555,  0.0, 0.444,  0.25, 0.444,
+    0.25, 0.444,  0.25, 0.555,  0.0, 0.555,
+//legs
+  //L1
+    0.5, 0.888,  0.5, 0.777,  0.75, 0.777,
+    0.75, 0.777,  0.75, 0.888,  0.5, 0.888,
+  //L2
+    0.25, 0.888,  0.25, 0.777,  0.5, 0.777,
+    0.5, 0.777,  0.5, 0.888,  0.25, 0.888,
+  //L3
+    0.5, 0.999,  0.5, 0.888,  0.75, 0.888,
+    0.75, 0.888,  0.75, 0.999,  0.5, 0.999,
+  //L4
+    0.75, 0.888,  0.75, 0.777,  1.0, 0.777,
+    1.0, 0.777,  1.0, 0.888,  0.75, 0.888,
+  //L5  
+    0.5, 0.777,  0.5, 0.666,  0.75, 0.666,
+    0.75, 0.666,  0.75, 0.777,  0.5, 0.777,
+  //L6
+    0.0, 0.888,  0.0, 0.777,  0.25, 0.777,
+    0.25, 0.777,  0.25, 0.888,  0.0, 0.888,
+
+  ];
+
+  vertexCoordsBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexCoordsBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexCoords), gl.STATIC_DRAW);
+  vertexCoordsBuffer.itemSize = 2;
+  vertexCoordsBuffer.numItems = vertexCoordsBuffer.length/6;
+
+  textureBuffer = gl.createTexture();
+  var textureImg = new Image();
+  textureImg.onload = function() {
+    gl.bindTexture(gl.TEXTURE_2D, textureBuffer);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textureImg);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  }
+  textureImg.src="tex.png";
+  //Init Matrices
+  let aspect = gl.viewportWidth / gl.viewportHeight;
+  let fov = 45.0 * Math.PI / 180.0;
+  let zFar = 100.0;
+  let zNear = 0.1;
+  uPMatrix = [
+   1.0 / (aspect * Math.tan(fov / 2)), 0                        , 0                                    , 0,
+   0                                 , 1.0 / (Math.tan(fov / 2)), 0                                    , 0,
+   0                                 , 0                        , -(zFar + zNear) / (zFar - zNear)     , -1,
+   0                                 , 0                        , -(2 * zFar * zNear) / (zFar - zNear) , 0.0,
+  ];
+  Tick();
+}
+
+var angle = 20.0;
+var angleZ = 0.0;
+var angleY = 0.0;
+var angleX = 0.0;
+var translateZ = -15.0;
+var translateY = -5.0;
+var translateX = 0.0;
+
+var translateZ2 = 0.0;
+var translateY2 = 0.0;
+var translateX2 = 0.0;
+
+function Tick()
+{
+  
+  function moveCzasteczki(Val,Pos,n,dt)
+  {
+    for(let i = 0;i<n;i++)
+    {
+      Pos[i*3+0]+=Val[i*3+0]*dt;
+      Pos[i*3+1]+=Val[i*3+1]*dt;
+      Pos[i*3+2]+=Val[i*3+2]*dt;
+    }
+    return Pos;
+  }
+  //vertexPositionBuffer = moveCzasteczki(vertexPositionBuffer,100,1);
+  let uMVMatrix = MatrixTranspose([
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, 1, 0,
+  0, 0, 0, 1,
+ ]);
+
+  let uMVTranslateConstX = MatrixTranspose([
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, 1, 0,
+  2, 0, 0, 1,
+  ]);
+
+  let uMVTranslateConstY = MatrixTranspose([
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, 1, 0,
+  0, 2, 0, 1,
+  ]);
+
+  let uMVTranslateConstZ = MatrixTranspose([
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, 1, 0,
+  0, 0, 2, 1,
+  ]);
+
+  let uMVTranslateConstmX = MatrixTranspose([
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, 1, 0,
+  -2, 0, 0, 1,
+  ]);
+
+  let uMVTranslateConstmY = MatrixTranspose([
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, 1, 0,
+  0, -2, 0, 1,
+  ]);
+
+  let uMVTranslateConstmZ = MatrixTranspose([
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, 1, 0,
+  0, 0, -2, 1,
+  ]);
+
+  let uMVTranslateZ = MatrixTranspose([
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, 1, 0,
+  translateX, translateY, translateZ, 1,
+  ]);
+
+  let uMVTranslateZ2 = MatrixTranspose([
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, 1, 0,
+  translateX2, translateY2, translateZ2, 1,
+  ]);
+
+  let uMVRotZ = MatrixTranspose([
+  +Math.cos(angleZ*Math.PI/180.0),+Math.sin(angleZ*Math.PI/180.0),0,0,
+  -Math.sin(angleZ*Math.PI/180.0),+Math.cos(angleZ*Math.PI/180.0),0,0,
+  0,0,1,0,
+  0,0,0,1
+  ]);
+  let uMVRotY = MatrixTranspose([
+  +Math.cos(angleY*Math.PI/180.0),0,-Math.sin(angleY*Math.PI/180.0),0,
+  0,1,0,0,
+  +Math.sin(angleY*Math.PI/180.0),0,+Math.cos(angleY*Math.PI/180.0),0,
+  0,0,0,1
+  ]);
+  let uMVRotX = MatrixTranspose([
+  1,0,0,0,
+  0,+Math.cos(angleX*Math.PI/180.0),+Math.sin(angleX*Math.PI/180.0),0,
+  0,-Math.sin(angleX*Math.PI/180.0),+Math.cos(angleX*Math.PI/180.0),0,
+  0,0,0,1
+  ]);
+
+  //Create Model View Matrix by Multiplication elementary matrices
+  //uMVMatrix = uMVTranslateZ*uMVRotX*uMVRotY*uMVRotZ
+  //uMVMatrix = MatrixMul(uMVMatrix,uMVRotX);
+  //uMVMatrix = MatrixMul(uMVMatrix,uMVRotY);
+  //uMVMatrix = MatrixMul(uMVMatrix,uMVRotZ);
+  //uMVMatrix = MatrixMul(uMVMatrix,uMVTranslateZ);
+
+  uMVMatrix = MatrixMul(uMVRotX,uMVMatrix);
+  uMVMatrix = MatrixMul(uMVRotY,uMVMatrix);
+  uMVMatrix = MatrixMul(uMVRotZ,uMVMatrix);
+  uMVMatrix = MatrixMul(uMVTranslateZ,uMVMatrix);
+
+  //Render Scene
+  gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+  gl.clearColor(1.0,0.2,0.2,1.0);
+  gl.clearDepth(1.0);                 // Clear everything
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.useProgram(shaderProgram)
+
+  gl.enable(gl.DEPTH_TEST);           // Enable depth testing
+  gl.depthFunc(gl.LEQUAL);            // Near things obscure far things
+
+
+
+  gl.uniformMatrix4fv(gl.getUniformLocation(shaderProgram, "uPMatrix"), false, new Float32Array(uPMatrix)); //Pass matrices
+  gl.uniformMatrix4fv(gl.getUniformLocation(shaderProgram, "uMVMatrix"), false, new Float32Array(MatrixTranspose(uMVMatrix)));
+
+  gl.enableVertexAttribArray(gl.getAttribLocation(shaderProgram, "aVertexPosition"));  //Pass the geometry
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer);
+  gl.vertexAttribPointer(gl.getAttribLocation(shaderProgram, "aVertexPosition"), vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+  gl.enableVertexAttribArray(gl.getAttribLocation(shaderProgram, "aVertexColor"));  //Pass the geometry
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexColorBuffer);
+  gl.vertexAttribPointer(gl.getAttribLocation(shaderProgram, "aVertexColor"), vertexColorBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+  gl.enableVertexAttribArray(gl.getAttribLocation(shaderProgram, "aVertexCoords"));  //Pass the geometry
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexCoordsBuffer);
+  gl.vertexAttribPointer(gl.getAttribLocation(shaderProgram, "aVertexCoords"), vertexCoordsBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+  gl.uniform1f(gl.getUniformLocation(shaderProgram, "uBrightness"), 0.6);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, textureBuffer);
+  gl.uniform1i(gl.getUniformLocation(shaderProgram, "uSampler"), 0);
+
+  gl.drawArrays(gl.TRIANGLES, 0, vertexPositionBuffer.numItems*3); //Invoke drawing
+
+
+  gl.uniformMatrix4fv(gl.getUniformLocation(shaderProgram, "uPMatrix"), false, new Float32Array(uPMatrix)); //Pass matrices
+  gl.uniformMatrix4fv(gl.getUniformLocation(shaderProgram, "uMVMatrix"), false, new Float32Array(MatrixTranspose(uMVMatrix)));
+
+  gl.enableVertexAttribArray(gl.getAttribLocation(shaderProgram, "aVertexPosition"));  //Pass the geometry
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexPointCloudPositionBuffer);
+  gl.vertexAttribPointer(gl.getAttribLocation(shaderProgram, "aVertexPosition"), vertexPointCloudPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+  gl.enableVertexAttribArray(gl.getAttribLocation(shaderProgram, "aVertexColor"));  //Pass the geometry
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexPointCloudColorBuffer);
+  gl.vertexAttribPointer(gl.getAttribLocation(shaderProgram, "aVertexColor"), vertexPointCloudColorBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+  gl.enableVertexAttribArray(gl.getAttribLocation(shaderProgram, "aVertexCoords"));  //Pass the geometry
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexPointCloudCoordsBuffer);
+  gl.vertexAttribPointer(gl.getAttribLocation(shaderProgram, "aVertexCoords"), vertexPointCloudCoordsBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+  gl.uniform1f(gl.getUniformLocation(shaderProgram, "uBrightness"), 0.6);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, textureBuffer);
+  gl.uniform1i(gl.getUniformLocation(shaderProgram, "uSampler"), 0);
+
+  gl.drawArrays(gl.TRIANGLES, 0, vertexPointCloudPositionBuffer.numItems*3); //Invoke drawing
+  //gl.drawArrays(gl.POINTS, 0, vertexPositionBuffer.numItems); //Invoke drawing
+
+  setTimeout(Tick,100);
+}
+
+function keydown(e)
+{
+ if(e.keyCode==87) angleX=angleX+1.0;
+ if(e.keyCode==83) angleX=angleX-1.0;
+ if(e.keyCode==68) angleY=angleY+1.0;
+ if(e.keyCode==65) angleY=angleY-1.0;
+ if(e.keyCode==81) angleZ=angleZ+1.0;
+ if(e.keyCode==69) angleZ=angleZ-1.0;
+
+ if(e.keyCode==39) translateX=translateX+0.1;
+ if(e.keyCode==37) translateX=translateX-0.1;
+ if(e.keyCode==38) translateY=translateY+0.1;
+ if(e.keyCode==40) translateY=translateY-0.1;
+ if(e.keyCode==34) translateZ=translateZ+0.1;
+ if(e.keyCode==33) translateZ=translateZ-0.1;
+
+ if(e.keyCode==76) translateX2=translateX2+0.1;
+ if(e.keyCode==74) translateX2=translateX2-0.1;
+ if(e.keyCode==73) translateY2=translateY2+0.1;
+ if(e.keyCode==75) translateY2=translateY2-0.1;
+ if(e.keyCode==85) translateZ2=translateZ2+0.1;
+ if(e.keyCode==79) translateZ2=translateZ2-0.1;
+}
+</script>
+</head>
+<body onload="startGL()" onkeydown="keydown(event)">
+<canvas id="canvas3D" width="640" height="480" style="border: solid black 1px"></canvas>
+</body>
+</html>
