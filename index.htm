@@ -11,6 +11,9 @@ var vertexCoordsBuffer;
 var vertexPointCloudPositionBuffer;
 var vertexPointCloudColorBuffer;
 var vertexPointCloudCoordsBuffer;
+var vertexPointCloudPosition;
+
+var czasteczkiNumber = 500;
 
 //Implementacja mnożenia macierzy
 function MatrixMul(a, b)
@@ -33,7 +36,51 @@ function MatrixMul(a, b)
   return c;
 }
 
-//Implementacja transpozycji macierzy
+function createCzasteczki(n,s,a)
+  {
+    let czasteczki = [];
+    for(let i = 0; i<n; i++)
+    {
+      czasteczki.push(Math.random()*s-a); //x
+      czasteczki.push(Math.random()*s-a); //y
+      czasteczki.push(Math.random()*s-a); //z
+    }
+    return czasteczki;
+  }
+
+
+function moveCzasteczki(Pos,Val,n,dt)
+  {
+    for(let i = 0;i<n;i++)
+    {
+      Pos[i*3+0]+=Val[i*3+0]*dt;
+      Pos[i*3+1]+=Val[i*3+1]*dt;
+      Pos[i*3+2]+=Val[i*3+2]*dt;
+    }
+    return Pos;
+  }
+  
+  
+  function createTriangle(Pos,n,s)
+  {
+    let vertex = [];
+    for(let i=0; i<n;i++)
+    {
+      vertex.push([Pos[3*i+0]-s]);
+      vertex.push([Pos[3*i+1]]);
+      vertex.push([Pos[3*i+2]-s]);
+
+      vertex.push([Pos[3*i+0]+s]);
+      vertex.push([Pos[3*i+1]]);
+      vertex.push([Pos[3*i+2]-s]);
+
+      vertex.push([Pos[3*i+0]]);
+      vertex.push([Pos[3*i+1]]);
+      vertex.push([Pos[3*i+2]+s]);
+    }
+    return vertex
+  }
+  //Implementacja transpozycji macierzy
 function MatrixTranspose(a)
 {
   c = [
@@ -50,7 +97,6 @@ function MatrixTranspose(a)
 
   return c;
 }
-
 function startGL()
 {
   //Init OpenGL context
@@ -65,7 +111,7 @@ function startGL()
     attribute vec3 aVertexPosition;
     attribute vec3 aVertexColor;
     attribute vec2 aVertexCoords;
-    //attribute vec3 aVertexCloudPosition;
+    //attribute vec3 avertexCloudTrianlePosition;
     //attribute vec3 aVertexCloudColor;
     //attribute vec2 aVertexCloudCoords;
     uniform mat4 uMVMatrix;
@@ -113,62 +159,11 @@ function startGL()
   if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) alert('Could not initialise shaders');
   
   
+  vertexPointCloudPosition = createCzasteczki(czasteczkiNumber,3.5,0);
 
-  function genPointCzasteczkiPosition(n)
-  {
-    let czasteczkiPosition = [];
-    for(let i = 0; i<n; i++)
-    {
-      czasteczkiPosition.push(Math.random()*3.5); //x
-      czasteczkiPosition.push(Math.random()*3.5); //y      
-      czasteczkiPosition.push(Math.random()*3.5); //z
-    }
-    return czasteczkiPosition;
-  }
+  
+  let vertexCloudColor = createCzasteczki(czasteczkiNumber*3,3.5,0);
 
-  let vertexCloudPosition = genPointCzasteczkiPosition(100);
-
-  function genPointCzasteczkiColor(n)
-  {
-    let czasteczkiColor = [];
-    for(let i = 0; i<n; i++)
-    {
-      czasteczkiColor.push(Math.random()*3.5); //x
-      czasteczkiColor.push(Math.random()*3.5); //y
-      czasteczkiColor.push(Math.random()*3.5); //z
-    }
-    return czasteczkiColor;
-  }
-
-  let vertexCloudColor = genPointCzasteczkiColor(300);
-
-  function createTriangle(Pos,n,s)
-  {
-    let vertex = [];
-    for(let i=0; i<n;i++)
-    {
-      vertex.push([Pos[3*i+0]-s]);
-      vertex.push([Pos[3*i+1]]);
-      vertex.push([Pos[3*i+2]-s]);
-
-      vertex.push([Pos[3*i+0]+s]);
-      vertex.push([Pos[3*i+1]]);
-      vertex.push([Pos[3*i+2]-s]);
-
-      vertex.push([Pos[3*i+0]]);
-      vertex.push([Pos[3*i+1]]);
-      vertex.push([Pos[3*i+2]+s]);
-    }
-    return vertex
-  }
-  vertexCloudPosition = createTriangle(vertexCloudPosition,100,0.1)
-
-
-  vertexPointCloudPositionBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, vertexPointCloudPositionBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexCloudPosition), gl.STATIC_DRAW);
-  vertexPointCloudPositionBuffer.itemSize = 3;
-  vertexPointCloudPositionBuffer.numItems = vertexCloudPosition.length/(9);
 
   vertexPointCloudColorBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, vertexPointCloudColorBuffer);
@@ -403,17 +398,6 @@ var translateX2 = 0.0;
 function Tick()
 {
   
-  function moveCzasteczki(Val,Pos,n,dt)
-  {
-    for(let i = 0;i<n;i++)
-    {
-      Pos[i*3+0]+=Val[i*3+0]*dt;
-      Pos[i*3+1]+=Val[i*3+1]*dt;
-      Pos[i*3+2]+=Val[i*3+2]*dt;
-    }
-    return Pos;
-  }
-  //vertexPositionBuffer = moveCzasteczki(vertexPositionBuffer,100,1);
   let uMVMatrix = MatrixTranspose([
   1, 0, 0, 0,
   0, 1, 0, 0,
@@ -496,12 +480,6 @@ function Tick()
   0,0,0,1
   ]);
 
-  //Create Model View Matrix by Multiplication elementary matrices
-  //uMVMatrix = uMVTranslateZ*uMVRotX*uMVRotY*uMVRotZ
-  //uMVMatrix = MatrixMul(uMVMatrix,uMVRotX);
-  //uMVMatrix = MatrixMul(uMVMatrix,uMVRotY);
-  //uMVMatrix = MatrixMul(uMVMatrix,uMVRotZ);
-  //uMVMatrix = MatrixMul(uMVMatrix,uMVTranslateZ);
 
   uMVMatrix = MatrixMul(uMVRotX,uMVMatrix);
   uMVMatrix = MatrixMul(uMVRotY,uMVMatrix);
@@ -544,8 +522,14 @@ function Tick()
   gl.drawArrays(gl.TRIANGLES, 0, vertexPositionBuffer.numItems*3); //Invoke drawing
 
 
-  gl.uniformMatrix4fv(gl.getUniformLocation(shaderProgram, "uPMatrix"), false, new Float32Array(uPMatrix)); //Pass matrices
-  gl.uniformMatrix4fv(gl.getUniformLocation(shaderProgram, "uMVMatrix"), false, new Float32Array(MatrixTranspose(uMVMatrix)));
+  let vertexCloudVal = createCzasteczki(czasteczkiNumber,20,10)
+  vertexPointCloudPosition = moveCzasteczki(vertexPointCloudPosition,vertexCloudVal,czasteczkiNumber,0.01);
+  vertexCloudTrianlePosition = createTriangle(vertexPointCloudPosition ,czasteczkiNumber,0.2)
+  vertexPointCloudPositionBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexPointCloudPositionBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexCloudTrianlePosition), gl.STATIC_DRAW);
+  vertexPointCloudPositionBuffer.itemSize = 3;
+  vertexPointCloudPositionBuffer.numItems = vertexCloudTrianlePosition.length/(9);
 
   gl.enableVertexAttribArray(gl.getAttribLocation(shaderProgram, "aVertexPosition"));  //Pass the geometry
   gl.bindBuffer(gl.ARRAY_BUFFER, vertexPointCloudPositionBuffer);
@@ -568,6 +552,8 @@ function Tick()
   gl.drawArrays(gl.TRIANGLES, 0, vertexPointCloudPositionBuffer.numItems*3); //Invoke drawing
   //gl.drawArrays(gl.POINTS, 0, vertexPositionBuffer.numItems); //Invoke drawing
 
+  console.log(vertexPointCloudPosition);
+  console.log(vertexCloudVal);
   setTimeout(Tick,100);
 }
 
