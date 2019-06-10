@@ -13,7 +13,7 @@ var vertexPointCloudColorBuffer;
 var vertexPointCloudCoordsBuffer;
 var vertexPointCloudPosition;
 
-var czasteczkiNumber = 500;
+var czasteczkiNumber = 5*500;
 
 //Implementacja mnożenia macierzy
 function MatrixMul(a, b)
@@ -36,14 +36,14 @@ function MatrixMul(a, b)
   return c;
 }
 
-function createCzasteczki(n,s,a)
+function createCzasteczki(n,s,x,y,z)
   {
     let czasteczki = [];
     for(let i = 0; i<n; i++)
     {
-      czasteczki.push(Math.random()*s-a); //x
-      czasteczki.push(Math.random()*s-a); //y
-      czasteczki.push(Math.random()*s-a); //z
+      czasteczki.push(Math.random()*s-x); //x
+      czasteczki.push(Math.random()*s-y); //y
+      czasteczki.push(Math.random()*s-z); //z
     }
     return czasteczki;
   }
@@ -159,10 +159,10 @@ function startGL()
   if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) alert('Could not initialise shaders');
   
   
-  vertexPointCloudPosition = createCzasteczki(czasteczkiNumber,3.5,0);
+  vertexPointCloudPosition = createCzasteczki(czasteczkiNumber,0.1,-1,-9,1);
 
   
-  let vertexCloudColor = createCzasteczki(czasteczkiNumber*3,3.5,0);
+  let vertexCloudColor = createCzasteczki(czasteczkiNumber*3,0.1,0,0,0);
 
 
   vertexPointCloudColorBuffer = gl.createBuffer();
@@ -522,9 +522,9 @@ function Tick()
   gl.drawArrays(gl.TRIANGLES, 0, vertexPositionBuffer.numItems*3); //Invoke drawing
 
 
-  let vertexCloudVal = createCzasteczki(czasteczkiNumber,20,10)
+  let vertexCloudVal = createCzasteczki(czasteczkiNumber,20,10,10,10)
   vertexPointCloudPosition = moveCzasteczki(vertexPointCloudPosition,vertexCloudVal,czasteczkiNumber,0.01);
-  vertexCloudTrianlePosition = createTriangle(vertexPointCloudPosition ,czasteczkiNumber,0.2)
+  vertexCloudTrianlePosition = createTriangle(vertexPointCloudPosition ,czasteczkiNumber,0.05)
   vertexPointCloudPositionBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, vertexPointCloudPositionBuffer);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexCloudTrianlePosition), gl.STATIC_DRAW);
